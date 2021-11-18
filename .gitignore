@@ -18,4 +18,5 @@ src/.deps
 src/.dirstamp
 src/Makefile
 src/Makefile.in
+/.vscode
 dump

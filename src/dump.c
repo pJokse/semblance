@@ -73,6 +73,8 @@ static void dump_file(char *file){
             dumppe(offset);
         else if (magic == 0x454e)
             dumpne(offset);
+        else if (magic == 0x454C | magic == 0x584C)
+            dumplx(offset);
         else
             dumpmz();
     } else

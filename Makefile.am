@@ -13,4 +13,8 @@ dump_SOURCES = \
 	src/pe.h \
 	src/semblance.h \
 	src/x86_instr.c \
-	src/x86_instr.h
+	src/x86_instr.h \
+	src/lx_header.c \
+	src/lx.h \
+	src/lx_segment.h \
+	src/lx_resource.h
