@@ -69,11 +69,11 @@ static void dump_file(char *file){
         offset = read_dword(0x3c);
         magic = read_word(offset);
 
-        if (magic == 0x4550)
+        if (magic == 0x4550) /* PE */
             dumppe(offset);
-        else if (magic == 0x454e)
+        else if (magic == 0x454e) /* NE */
             dumpne(offset);
-        else if (magic == 0x454C | magic == 0x584C)
+        else if (magic == 0x454C | magic == 0x584C) /* LE/LX */
             dumplx(offset);
         else
             dumpmz();
