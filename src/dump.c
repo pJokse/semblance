@@ -80,7 +80,7 @@ static void dump_file(char *file){
     else if (magic == 0x454C | magic == 0x584C) /* LE/LX */
         dumplx(offset);
     else
-            dumpmz();
+        dumpmz();
     return;
 }
 
