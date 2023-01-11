@@ -4,18 +4,18 @@
 
 */
 
-#include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 
 #include "semblance.h"
 #include "lx.h"
 
 static void print_lx_flags(dword flags) {
     char buffer[1024];
+    strcpy(buffer,"");
 
-    if (flags & 0x00000001UL) strcpy(buffer, "Single data");  // FIXME - comma problem
+    if (flags & 0x00000001UL) strcpy(buffer, "Single data");
     if ((flags & 0x00000004UL) == 0) strcat(buffer, ", Global Initialization");
     if ((flags & 0x00000004UL) == 1) strcat(buffer, ", Per-process Initialization");
     if (flags & 0x00000010UL) strcat(buffer, ", No internal fixup");
@@ -31,6 +31,8 @@ static void print_lx_flags(dword flags) {
     if (flags & 0x000200000UL) strcat(buffer, ", Device driver");
     if      ((flags & 0x400000000UL) == 0) strcat(buffer, ", DLL global termination");
     else if ((flags & 0x400000000UL) == 1) strcat(buffer, ", DLL Per-process termination");
+
+    if (buffer[0] == ',') strcpy(buffer,buffer+2); // Fixing prepending comma
 
     printf("Module flags: 0x%08x (%s)\n", flags, buffer);   
 }
@@ -60,6 +62,21 @@ static void print_lx_object_flags(word flags, byte exetype) {
     if (flags & 0x4000) strcat(buffer, ", Conforming for code");
     if      ((flags & 0x8000) == 0) strcat(buffer, ", Object IO privilege level: 0");
     else if ((flags & 0x8000) == 1) strcat(buffer, ", Object IO privilege level: 1");
+
+    if (buffer[0] == ',') strcpy(buffer,buffer+2); // Fixing prepending comma
+
+    printf("Flags: 0x%04x (%s)\n", flags, buffer);
+}
+
+static void print_lx_object_page_table_flags(word flags) {
+    char buffer[1024];
+
+    if (flags == 0x0000) strcpy(buffer, "Legal Physical Page in the module (Offset from Preload Page Section)");
+    if (flags == 0x0001) strcpy(buffer, "Iterated Data Page (Offset from Iterated Data Pages Section)");
+    if (flags == 0x0002) strcpy(buffer, "Invalid Page (zero)");
+    if (flags == 0x0003) strcpy(buffer, "Zero Filled Page (zero)");
+    if (flags == 0x0004) strcpy(buffer, "Unused");
+    if (flags == 0x0005) strcpy(buffer, "Compressed Page (Offset from Preload Pages Section)");
 
     printf("Flags: 0x%04x (%s)\n", flags, buffer);
 }
@@ -100,8 +117,8 @@ static void print_lx_target_os(word os) {
      printf("Target OS: %s\n", buffer);
 }
 
-static void print_lx_header(struct header_lx *header) {
-    putchar("\n");
+static void print_lx_header(const struct header_lx *header) {
+    putchar('\n');
     //printf("Linker version: %d.%d\n", NULL);
     print_lx_text_order("Byte order: ", header->byte_order);
     print_lx_text_order("Word order: ", header->word_order);
@@ -110,6 +127,8 @@ static void print_lx_header(struct header_lx *header) {
     print_lx_target_os(header->os_type);
     printf("EXE version: 0x%04x\n", header->version);
     print_lx_flags(header->flags);
+    printf("Stack size: %d (0x%08x)\n", header->stacksize);
+    printf("Heap size: %d (0x%08x)\n", header->heapsize);
     printf("Number of memory pages: %d\n", header->num_pages);
     printf("Initial object CS: %d (0x%08x)\n", header->start_obj, header->start_obj);
     printf("EIP: %d (0x%08x)\n", header->eip, header->eip);
@@ -146,14 +165,84 @@ static void get_lxentry() {
 
 }
 
-static void readlx(off_t offset_lx, struct lx *lx) {
-    memcpy(&lx->header, read_data(offset_lx), sizeof(lx->header));
+static void get_lx_objects(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
 
-    get_lxentry(offset_lx + lx->header.entry_off, lx);
+    lx->object_tables = malloc(lx->object_tables_count * sizeof(struct lx_object_table));
+    offset = offset_lx + lx->header->objtab_off;
+
+    for (i = 0; i < lx->object_tables_count; i++) {
+        memcpy(&lx->object_tables[i], read_data(offset + i * sizeof(struct lx_object_table)), sizeof(struct lx_object_table));
+    }
+}
+
+static void get_lx_export_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+
+    //lx->lx_exports_table = malloc();
+}
+
+static void get_lx_import_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    char tempname[1024];
+    int i, j;
+    byte tmp;
+
+    lx->imports_table = malloc(lx->header->num_impmods * sizeof(struct lx_imports));
+    offset = offset_lx + lx->header->impmod_off;
+    for (i = 0; i < lx->imports_count; i++) {
+        tmp = read_byte(offset);
+        offset++;
+        memset(tempname, 0, 1024);
+        for (j = 0; j < tmp; j++) {
+            tempname[j] = read_byte(offset + j);
+        }
+        offset = offset + tmp - 1;
+        lx->imports_table[i].name = tempname;
+        lx->imports_table[i].ordinal = 0;
+        printf("%s, %d\n", lx->imports_table[i].name, lx->imports_table[i].ordinal);
+        offset++;
+    }
+}
+
+static void readlx(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+
+    lx->header = read_data(offset_lx);
+    
+    lx->object_tables_count = lx->header->num_pages;
+    if (lx->object_tables_count > 0) {
+        get_lx_objects(offset_lx, lx);
+    }
+    
+    lx->imports_count = lx->header->num_impmods;
+    if (lx->imports_count > 0) {
+        get_lx_import_table(offset_lx, lx);
+    }
+
+    get_lx_export_table(offset_lx, lx);
+
+    
+    if (lx->header->signature == 0x454C) {
+        // LE
+        lx->type = "LE";
+    }
+    else if (lx->header->signature == 0x584C) {
+        // LX
+        lx->type = "LX";
+    }
+    printf("Magical girl %#04X\n", lx->header->signature);
+    for (int i = 0; i < lx->imports_count; i++) {
+        printf("%s\n",lx->imports_table[i].name);
+    }
+    //printf("Byte order: %#2X\n", lx->header->byte_order);
+    //printf("Object count %d\n", lx->object_tables_count);
 }
 
 void dumplx(off_t offset_lx) {
-    struct lx lx;
+    struct lx lx = {0};
     int i;
     
     readlx(offset_lx, &lx);
@@ -165,7 +254,30 @@ void dumplx(off_t offset_lx) {
     }
 
     
-    printf("Module type: LE/LX (Linear Executable)\n");
+    printf("Module type: %s (Linear Executable)\n", lx.type);
+
+    if (lx.name)
+        printf("Module name: %s\n", lx.name);
+    
+    if (mode & DUMPHEADER)
+        print_lx_header(lx.header);
+    
+    if (mode & DUMPEXPORT) {
+        putchar('\n');
+    }
+
+    if (mode & DUMPIMPORT) {
+        putchar('\n');
+        printf("Imported functions:\n");
+        for (i = 0; i < lx.imports_count; i++) {
+            printf("%s\n",lx.imports_table[i].name);
+        }
+    }
+
+    if (mode & DISASSEMBLE)
+    {
+
+    }
 
     freelx(&lx);
 }

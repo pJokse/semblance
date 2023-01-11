@@ -87,5 +87,6 @@ extern int pe_rel_addr;
 void dumpmz(void);
 void dumpne(off_t offset_ne);
 void dumppe(off_t offset_pe);
+void dumplx(off_t offset_lx);
 
 #endif /* SEMBLANCE_H */

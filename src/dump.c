@@ -224,7 +224,7 @@ int main(int argc, char *argv[]){
             }
             break;
         default:
-            fprintf(stderr, "Usage: dumpne [options] <file>\n");
+            fprintf(stderr, "Usage: dump [options] <file>\n");
             return 1;
         }
     }

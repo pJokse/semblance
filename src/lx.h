@@ -90,11 +90,66 @@ typedef union {
     struct lx_map_entry lx;
 } lx_mapentry;
 
+struct lx_object_table {
+    dword bytes_in_segment;
+    dword relocation_base_address;
+    dword flags;
+    dword page_map_index;
+    dword page_map_entries;
+    dword reserved;
+};
+
+struct lx_object_page_table {
+    dword page_data_offset;
+    word data_size;
+    word flags;
+};
+
+struct lx_resource_table {
+    word type;
+    word name_id;
+    dword resource_size;
+    word object_count;
+    word offset;
+};
+
+struct lx_exports {
+    const char *name;
+    word ordinal;
+};
+
+struct lx_imports {
+    const char *name;
+    word ordinal;
+};
+
+struct lx_module {
+    word direct;
+    word length;
+    word offset;
+};
+
 struct lx {
-    struct header_lx header;
+    const struct header_lx *header;
     char *name;
     char *description;
 
+    char *type;
+
+    struct lx_object_table *object_tables;
+    unsigned int object_tables_count;
+
+    struct lx_object_page_table *object_page_tables;
+    unsigned int object_page_table_count;
+    
+    struct lx_resource_table *resource_tables;
+    unsigned int resources_count;
+
+    struct lx_exports *exports_table;
+    unsigned int exports_count;
+
+    struct lx_imports *imports_table;
+    unsigned int imports_count;
 };
 
 #endif /* __LX_H */
