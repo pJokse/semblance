@@ -127,8 +127,8 @@ static void print_lx_header(const struct header_lx *header) {
     print_lx_target_os(header->os_type);
     printf("EXE version: 0x%04x\n", header->version);
     print_lx_flags(header->flags);
-    printf("Stack size: %d (0x%08x)\n", header->stacksize);
-    printf("Heap size: %d (0x%08x)\n", header->heapsize);
+    printf("Stack size: %d (0x%08x)\n", header->stacksize, header->stacksize);
+    printf("Heap size: %d (0x%08x)\n", header->heapsize, header->heapsize);
     printf("Number of memory pages: %d\n", header->num_pages);
     printf("Initial object CS: %d (0x%08x)\n", header->start_obj, header->start_obj);
     printf("EIP: %d (0x%08x)\n", header->eip, header->eip);
@@ -200,7 +200,8 @@ static void get_lx_import_table(off_t offset_lx, struct lx *lx) {
             tempname[j] = read_byte(offset + j);
         }
         offset = offset + tmp - 1;
-        lx->imports_table[i].name = tempname;
+        lx->imports_table[i].name = strdup(tempname);
+        //lx->imports_table[i].name = tempname;
         lx->imports_table[i].ordinal = 0;
         printf("%s, %d\n", lx->imports_table[i].name, lx->imports_table[i].ordinal);
         offset++;

@@ -114,12 +114,12 @@ struct lx_resource_table {
 };
 
 struct lx_exports {
-    const char *name;
+    char *name;
     word ordinal;
 };
 
 struct lx_imports {
-    const char *name;
+    char *name;
     word ordinal;
 };
 
