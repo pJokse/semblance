@@ -90,6 +90,12 @@ typedef union {
     struct lx_map_entry lx;
 } lx_mapentry;
 
+struct lx_object_page_table {
+    dword page_data_offset;
+    word data_size;
+    word flags;
+};
+
 struct lx_object_table {
     dword bytes_in_segment;
     dword relocation_base_address;
@@ -97,12 +103,6 @@ struct lx_object_table {
     dword page_map_index;
     dword page_map_entries;
     dword reserved;
-};
-
-struct lx_object_page_table {
-    dword page_data_offset;
-    word data_size;
-    word flags;
 };
 
 struct lx_resource_table {
@@ -123,12 +123,6 @@ struct lx_imports {
     word ordinal;
 };
 
-struct lx_module {
-    word direct;
-    word length;
-    word offset;
-};
-
 struct lx {
     const struct header_lx *header;
     char *name;
@@ -139,17 +133,21 @@ struct lx {
     struct lx_object_table *object_tables;
     unsigned int object_tables_count;
 
-    struct lx_object_page_table *object_page_tables;
-    unsigned int object_page_table_count;
-    
-    struct lx_resource_table *resource_tables;
+    struct lx_resource_table *resource_table;
     unsigned int resources_count;
 
-    struct lx_exports *exports_table;
-    unsigned int exports_count;
+    struct lx_exports *resident_exports_table;
+    unsigned int resident_exports_count;
+
+    struct lx_exports *nonresident_exports_table;
+    unsigned int nonresident_exports_count;
 
     struct lx_imports *imports_table;
     unsigned int imports_count;
+
+    struct lx_object_page_table *object_page_tables;
+    unsigned int objects_page_count;
+
 };
 
 #endif /* __LX_H */

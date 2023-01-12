@@ -43,7 +43,7 @@ static void print_lx_object_flags(word flags, byte exetype) {
 
     char buffer[1024];
     
-    if (flags & 0x0001) strcpy(buffer, "Readable object"); // FIXME - comma problem
+    if (flags & 0x0001) strcpy(buffer, "Readable object");
     if (flags & 0x0002) strcat(buffer, ", Writeable object");
     if (flags & 0x0004) strcat(buffer, ", Executeable object");
     if (flags & 0x0008) strcat(buffer, ", Resource object");
@@ -169,19 +169,132 @@ static void get_lx_objects(off_t offset_lx, struct lx *lx) {
     off_t offset;
     int i;
 
-    lx->object_tables = malloc(lx->object_tables_count * sizeof(struct lx_object_table));
     offset = offset_lx + lx->header->objtab_off;
-
-    for (i = 0; i < lx->object_tables_count; i++) {
-        memcpy(&lx->object_tables[i], read_data(offset + i * sizeof(struct lx_object_table)), sizeof(struct lx_object_table));
+    lx->object_tables = malloc(lx->object_tables_count * sizeof(struct lx_object_table));
+    for (i = 0; i < lx->header->num_objects; i++) {
+        lx->object_tables[i].bytes_in_segment = read_dword(offset);
+        offset = offset + 4;
+        lx->object_tables[i].relocation_base_address = read_dword(offset);
+        offset = offset + 4;
+        lx->object_tables[i].flags = read_dword(offset);
+        offset = offset + 4;
+        lx->object_tables[i].page_map_index = read_dword(offset);
+        offset = offset + 4;
+        lx->object_tables[i].page_map_entries = read_dword(offset);
+        offset = offset + 4;
+        lx->object_tables[i].reserved = read_dword(offset);
+        offset = offset + 4;
+        printf("object %lu 0x%08x 0x%08x 0x%08x ", i, lx->object_tables[i].bytes_in_segment, lx->object_tables[i].relocation_base_address, lx->object_tables[i].flags);
+        printf("0x%08x 0x%08x 0x%08x\n", lx->object_tables[i].page_map_index, lx->object_tables[i].page_map_entries, lx->object_tables[i].reserved);
     }
 }
 
-static void get_lx_export_table(off_t offset_lx, struct lx *lx) {
+static void get_lx_object_pages(off_t offset_lx, struct lx *lx) {
     off_t offset;
-    int i;
+    int i, j;
+    char *tmp;
 
-    //lx->lx_exports_table = malloc();
+    offset = offset_lx + lx->header->objmap_off;
+    printf("marffset 0x%08x 0x%08x 0x%08x\n", offset_lx, offset, lx->header->objmap_off);
+    printf("maffle waffle 0x%08x\n",lx->header->page_off);
+    printf("Ganz genau so broken\n"); // FIX THIS FUNCTION, IT'S BROKEN FOR AT LEAST SOME LE FILES
+    lx->object_page_tables = malloc(lx->objects_page_count * sizeof(struct lx_object_page_table));
+    for (i = 0; i < lx->objects_page_count; i++) {
+        if (lx->header->signature == 0x584C) { // LX
+            lx->object_page_tables[i].page_data_offset = read_dword(offset);
+            offset = offset + 4;
+            lx->object_page_tables[i].data_size = read_word(offset);
+            offset = offset + 2;
+            lx->object_page_tables[i].flags = read_word(offset);
+            offset = offset + 2;
+        }
+        else if (lx->header->signature == 0x454C) { // LE
+            tmp = read_data(offset);
+            offset = offset + 4;
+            lx->object_page_tables[i].page_data_offset = (dword)(tmp[0] << 24 | tmp[1] << 16 | tmp[2] << 8) >> 8;
+            lx->object_page_tables[i].flags = tmp[3];
+            lx->object_page_tables[i].data_size = 0;
+            //printf("LE %08x\n", (tmp[0] << 24 | tmp[1] << 16 | tmp[2] << 8) >> 8);
+        }
+        printf("object page 0x%02x 0x%08x 0x%04x 0x%04x\n", i + 1, lx->object_page_tables[i].page_data_offset, lx->object_page_tables[i].data_size, lx->object_page_tables[i].flags);
+    }
+
+}
+
+static void get_lx_export_tables(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int count, i, j, len, ordinal;
+    char buffer[1024];
+    count = 0;
+
+    offset = offset_lx + lx->header->resname_off;
+    if (lx->header->resname_off > 0) {
+        while (read_byte(offset) != '\0') {
+            len = read_byte(offset);
+            offset++;
+            for (i = 0;i < len; i++) {
+                buffer[i] = read_byte(offset);
+                offset++;
+            }
+            ordinal = read_word(offset);
+            offset = offset + 2;
+            count++;
+        }
+        lx->resident_exports_count = count;
+        lx->resident_exports_table = malloc(lx->resident_exports_count * sizeof(struct lx_exports));
+    
+        memset(buffer, 0, 1024);
+        offset = offset_lx + lx->header->resname_off;
+        for (i = 0; i < lx->resident_exports_count; i++) {
+            len = read_byte(offset);
+            offset++;
+            for (j = 0; j < len; j++) {
+                buffer[j] = read_byte(offset);
+                offset++;
+            }
+            ordinal = read_word(offset);
+            offset = offset + 2;
+            lx->resident_exports_table[i].name = strdup(buffer);
+            lx->resident_exports_table[i].ordinal = ordinal;
+            memset(buffer, 0, 1024);
+        }
+    }
+
+    offset = lx->header->nonres_off;
+    if (lx->header->nonres_off > 0) {
+        memset(buffer, 0, 1024);
+        count = 0;
+
+        while (read_byte(offset) != '\0') {
+            len = read_byte(offset);
+            offset++;
+            for (i = 0;i < len; i++) {
+                buffer[i] = read_byte(offset);
+                offset++;
+            }
+            ordinal = read_word(offset);
+            offset = offset + 2;
+            count++;
+        }
+        lx->nonresident_exports_count = count;
+        lx->nonresident_exports_table = malloc(lx->resident_exports_count * sizeof(struct lx_exports));
+
+        memset(buffer, 0, 1024);
+        offset = lx->header->nonres_off;
+        for (i = 0; i < lx->nonresident_exports_count; i++) {
+            len = read_byte(offset);
+            offset++;
+            for (j = 0; j < len; j++) {
+                buffer[j] = read_byte(offset);
+                offset++;
+            }
+            ordinal = read_word(offset);
+            offset = offset + 2;
+            lx->nonresident_exports_table[i].name = strdup(buffer);
+            lx->nonresident_exports_table[i].ordinal = ordinal;
+            memset(buffer, 0, 1024);
+        }
+    }
 }
 
 static void get_lx_import_table(off_t offset_lx, struct lx *lx) {
@@ -201,9 +314,8 @@ static void get_lx_import_table(off_t offset_lx, struct lx *lx) {
         }
         offset = offset + tmp - 1;
         lx->imports_table[i].name = strdup(tempname);
-        //lx->imports_table[i].name = tempname;
         lx->imports_table[i].ordinal = 0;
-        printf("%s, %d\n", lx->imports_table[i].name, lx->imports_table[i].ordinal);
+        //printf("%s, %d\n", lx->imports_table[i].name, lx->imports_table[i].ordinal);
         offset++;
     }
 }
@@ -212,10 +324,18 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     off_t offset;
 
     lx->header = read_data(offset_lx);
+
+    printf("VXD DDK %04x\n", lx->header->r.vxd.DDK_version);
     
-    lx->object_tables_count = lx->header->num_pages;
+    lx->object_tables_count = lx->header->num_objects;
     if (lx->object_tables_count > 0) {
         get_lx_objects(offset_lx, lx);
+    }
+
+    lx->objects_page_count = lx->header->num_pages;
+    if (lx->objects_page_count > 0) {
+        printf("hest222\n");
+        get_lx_object_pages(offset_lx, lx);
     }
     
     lx->imports_count = lx->header->num_impmods;
@@ -223,7 +343,7 @@ static void readlx(off_t offset_lx, struct lx *lx) {
         get_lx_import_table(offset_lx, lx);
     }
 
-    get_lx_export_table(offset_lx, lx);
+    get_lx_export_tables(offset_lx, lx);
 
     
     if (lx->header->signature == 0x454C) {
@@ -234,10 +354,7 @@ static void readlx(off_t offset_lx, struct lx *lx) {
         // LX
         lx->type = "LX";
     }
-    printf("Magical girl %#04X\n", lx->header->signature);
-    for (int i = 0; i < lx->imports_count; i++) {
-        printf("%s\n",lx->imports_table[i].name);
-    }
+    //printf("Magical girl %#04X\n", lx->header->signature);
     //printf("Byte order: %#2X\n", lx->header->byte_order);
     //printf("Object count %d\n", lx->object_tables_count);
 }
@@ -264,14 +381,29 @@ void dumplx(off_t offset_lx) {
         print_lx_header(lx.header);
     
     if (mode & DUMPEXPORT) {
-        putchar('\n');
+        if (lx.resident_exports_count > 0) {
+            putchar('\n');
+            printf("Resident exports:\n");
+            for (i = 0; i < lx.resident_exports_count; i++) {
+                printf("%s, %u\n", lx.resident_exports_table[i].name, lx.resident_exports_table->ordinal);
+            }
+        }
+        if (lx.nonresident_exports_count > 0) {
+            putchar('\n');
+            printf("Non-resident exports:\n");
+            for (i = 0; i < lx.nonresident_exports_count; i++) {
+                printf("%s, %u\n", lx.nonresident_exports_table[i].name, lx.nonresident_exports_table[i].ordinal);
+            }
+        }
     }
 
     if (mode & DUMPIMPORT) {
-        putchar('\n');
-        printf("Imported functions:\n");
-        for (i = 0; i < lx.imports_count; i++) {
-            printf("%s\n",lx.imports_table[i].name);
+        if (lx.imports_count >0) {
+            putchar('\n');
+            printf("Imported functions:\n");
+            for(i = 0; i < lx.imports_count; i++) {
+                printf("%s\n",lx.imports_table[i].name);
+            }
         }
     }
 
