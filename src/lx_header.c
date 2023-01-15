@@ -149,10 +149,16 @@ static void print_lx_header(const struct header_lx *header) {
     printf("ESP: %d (0x%08x)\n", header->esp, header->esp);
     printf("Memory page size: %d (0x%08x)\n", header->page_size, header->page_size);
     if (header->signature == 0x454C) printf("Size of last page: %d (0x%08x)\n", header->l.last_page, header->l.last_page); // LE
-    else                         printf("Left shift page offset: %d (0x%08x)\n", header->l.page_shift, header->l.page_shift); // LX
+    else printf("Left shift page offset: %d (0x%08x)\n", header->l.page_shift, header->l.page_shift); // LX
     printf("Fix-up section size: %d (0x%08x)\n", header->fixup_size, header->fixup_size);
+    if (header->os_type == 0x01) printf("Stack size (OS/2): %d (0x%08x)\n", header->stacksize, header->stacksize);
     if ((header->os_type == 0x02) | (header->os_type == 0x03)) printf("Heap size (16 bit): %d (0x%08x)\n", header->heapsize, header->heapsize);
-    if (header->os_type == 0x04) printf("Stack size (OS/2): %d (0x%08x)\n", header->stacksize, header->stacksize);
+    if (header->os_type == 0x04) {
+        printf("VxD resource table offfset: 0x%08x (%u)\n", header->r.vxd.winresoff, header->r.vxd.winresoff);
+        printf("Size of VxD resource table: 0x%08x (%u)\n", header->r.vxd.winreslen, header->r.vxd.winreslen);
+        printf("VxD indentifier: 0x%04x (%u)\n", header->r.vxd.device_ID, header->r.vxd.device_ID);
+        printf("VxD DDK version: 0x%04x (%u)\n", header->r.vxd.DDK_version, header->r.vxd.DDK_version);
+    }
     if (header->flags & 0x000200000UL) { 
         //printf("Windows VxD device ID: %u (0x%04x)\n");
         //printf("Windows VxD DDK version: (0x%04x)\n");
@@ -377,7 +383,7 @@ static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
             offset = lx->header->page_off + (lx->object_page_tables[i].page_data_offset << lx->header->l.page_shift);
         }
         printf("Page 0x%04x (%u) Index: 0x%08x (%u)\n", i, i, lx->object_page_tables[i].page_data_offset, lx->object_page_tables[i].page_data_offset);
-        printf("Offset: 0x%08x (%u)\n", offset, offset);
+        printf("Offset: 0x%08lx (%lu)\n", offset, offset);
         printf("Size: 0x%08x (%u)\n", lx->object_page_tables[i].data_size, lx->object_page_tables[i].data_size);
         print_lx_object_page_table_flags(lx->object_page_tables[i].flags);
         putchar('\n');
