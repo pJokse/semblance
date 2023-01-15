@@ -364,67 +364,25 @@ static void print_lx_objects(off_t offset_lx, struct lx *lx) {
 }
 
 static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
-    off_t offset, offset2;
+    off_t offset, offset2;  // Broken for LE
     int i, j;
 
     printf("Object pages:\n");
 
-    offset = lx->header->page_off;
     for(i = 0; i < lx->objects_page_count; i++) {
-        printf("Page 0x%04x (%u)\n", i, i);
-        //printf("moffset 0x%08x (%u)\n", lx->header->page_off, lx->header->page_off);
-         if (lx->object_page_tables[i].flags & 0x0003 | lx->object_page_tables[i].flags & 0x0002) {
-                // zero filled
-        }
-        if (lx->object_page_tables[i].flags == 0x0000) {
-                 // Offset from preload
-                if (i > 0) {
-                    if (lx->object_page_tables[i - 1].flags & 0x0001) {
-                        offset = offset + 0x1000;
-                    }
-                    else { 
-                        offset = offset + lx->object_page_tables[i - 1].data_size;
-                    }
-                }
-                else {
-                    offset = offset + lx->object_page_tables[i].data_size;
-                }
-                //printf("marfset 0x%08x (%lu)\n", lx->object_page_tables[i].page_data_offset, lx->object_page_tables[i].page_data_offset);
-        }
         if (lx->object_page_tables[i].flags & 0x0001) {
-                // Offset from Iterated Data Section
-            if (is_lxorle(lx) == 0) { //LE
-                //offset = lx->object_page_tables[i].page_data_offset;
-                //printf("møff\n");
-            }
-            else { //LX
-                if (i > 0) { 
-                    //offset = offset + lx->object_page_tables[i - 1].data_size;
-                    offset = lx->header->page_off;
-                }
-                else {
-                    offset = offset + lx->object_page_tables[i - 1].data_size;
-                }
-                //offset = lx->header->page_off << lx->object_page_tables[i].page_data_offset;
-                //printf("møfset %lu\n", lx->object_page_tables[i].page_data_offset);
-            }
-        }
-        if (lx->object_page_tables[i].flags & 0x04) {
-                // Range of pages
-        }
-        printf("Page index: 0x%08x (%u)\n", lx->object_page_tables[i].page_data_offset, lx->object_page_tables[i].page_data_offset);
-        /*if (lx->object_page_tables[i].flags & 0x0001) { 
-            printf("Offset: 0x%08x (%lu)\n", lx->header->page_off, lx->header->page_off);
+            offset = lx->header->idmap_off + (lx->object_page_tables[i].page_data_offset << lx->header->l.page_shift);
         }
         else {
-            printf("Offset: 0x%08x (%lu)\n", offset, offset);
-        }*/
-        printf("Offset: 0x%08lx (%lu)\n", offset, offset);
+            offset = lx->header->page_off + (lx->object_page_tables[i].page_data_offset << lx->header->l.page_shift);
+        }
+        printf("Page 0x%04x (%u) Index: 0x%08x (%u)\n", i, i, lx->object_page_tables[i].page_data_offset, lx->object_page_tables[i].page_data_offset);
+        printf("Offset: 0x%08x (%u)\n", offset, offset);
         printf("Size: 0x%08x (%u)\n", lx->object_page_tables[i].data_size, lx->object_page_tables[i].data_size);
         print_lx_object_page_table_flags(lx->object_page_tables[i].flags);
         putchar('\n');
     }
-
+    putchar('\n');
 }
 
 static void readlx(off_t offset_lx, struct lx *lx) {
@@ -524,10 +482,6 @@ void dumplx(off_t offset_lx) {
         print_lx_objects(offset_lx, &lx);
         print_lx_objects_map(offset_lx, &lx);
     }
-
-     if (mode & DUMPRSRC) {
-
-     }
 
     freelx(&lx);
 }
