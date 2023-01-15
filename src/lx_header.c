@@ -16,8 +16,8 @@ static void print_lx_flags(dword flags) {
     strcpy(buffer,"");
 
     if (flags & 0x00000001UL) strcpy(buffer, "Single data");
-    if ((flags & 0x00000004UL) == 0) strcat(buffer, ", Global Initialization");
-    if ((flags & 0x00000004UL) == 1) strcat(buffer, ", Per-process Initialization");
+    if (flags & 0x00000004UL) strcat(buffer, ", Per-process Initialization");
+    else strcat(buffer, ", Global Initialization");
     if (flags & 0x00000010UL) strcat(buffer, ", No internal fixup");
     if (flags & 0x00000020UL) strcat(buffer, ", No external fixup");
     if (flags & 0x00000100UL) strcat(buffer, ", Incompatible with PM windowing");
@@ -33,13 +33,13 @@ static void print_lx_flags(dword flags) {
     if ((flags & 0x00038000UL) == 0x00018000) strcat(buffer, ", Protected Memory Library Module");
     if ((flags & 0x00038000UL) == 0x00020000) strcat(buffer, ", Physical Device Driver module");
     if ((flags & 0x00038000UL) == 0x00028000) strcat(buffer, ", Virtual Device Driver module");
-    if ((flags & 0x00040000UL) == 0) strcat(buffer, ", Program file");
-    if ((flags & 0x00040000UL) == 1) strcat(buffer, ", DLL");
+    if (flags & 0x00040000UL) strcat(buffer, ", DLL");
+    else strcat(buffer, ", Program file");
     if (flags & 0x00004000UL) strcat(buffer, ", Reserved");
     if (flags & 0x00100000UL) strcat(buffer, ", Protected memory library module");
     if (flags & 0x00200000UL) strcat(buffer, ", Device driver");
-    if      ((flags & 0x40000000UL) == 0) strcat(buffer, ", DLL global termination");
-    else if ((flags & 0x40000000UL) == 1) strcat(buffer, ", DLL Per-process termination");
+    if (flags & 0x40000000UL) strcat(buffer, ", DLL Per-process termination");
+    else strcat(buffer, ", DLL global termination"); 
 
     if (buffer[0] == ',') strcpy(buffer,buffer+2); // Fixing prepending comma
 
