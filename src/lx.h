@@ -123,6 +123,18 @@ struct lx_imports {
     word ordinal;
 };
 
+struct lx_fixups_page_table {
+    dword offset;
+};
+
+struct lx_fixups_record_table {
+    byte source;
+    byte flags;
+    word source_offset;
+    char *target_data;
+        
+};
+
 struct lx {
     const struct header_lx *header;
     char *name;
@@ -147,6 +159,10 @@ struct lx {
 
     struct lx_object_page_table *object_page_tables;
     unsigned int objects_page_count;
+
+    struct lx_fixups *fixups;
+    dword fixups_offset_end;
+    unsigned int fixups_count;
 
 };
 
