@@ -123,6 +123,11 @@ struct lx_imports {
     word ordinal;
 };
 
+struct lx_import_procedure_name_table {
+    byte length;
+    char *name;
+};
+
 struct lx_fixups_page_table {
     dword offset;
 };
@@ -131,9 +136,15 @@ struct lx_fixups_record_table {
     byte source;
     byte flags;
     word source_offset;
-    char *target_data;
-        
 };
+
+struct lx_modules_directory_table {
+    word directive_number;
+    word length;
+    dword offset;
+};
+
+
 
 struct lx {
     const struct header_lx *header;
@@ -157,12 +168,18 @@ struct lx {
     struct lx_imports *imports_table;
     unsigned int imports_count;
 
+    struct lx_import_procedure_name_table *import_procedure_name_table;
+    unsigned int import_procedure_name_count;
+
     struct lx_object_page_table *object_page_tables;
     unsigned int objects_page_count;
 
     struct lx_fixups *fixups;
     dword fixups_offset_end;
     unsigned int fixups_count;
+
+    struct lx_modules_directory_table *modules_directive_table;
+    unsigned int modules_directory_count;
 
 };
 

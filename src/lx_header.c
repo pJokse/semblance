@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "semblance.h"
 #include "lx.h"
@@ -325,6 +326,23 @@ static void get_lx_fixup_tables(off_t offset_lx, struct lx *lx) {
     offset = lx->header->fixrec_off;
 }
 
+static void get_lx_module_directory_tables(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+
+    lx->modules_directory_count = lx->header->num_moddirs;
+    lx->modules_directive_table = malloc(lx->modules_directory_count * sizeof(struct lx_modules_directory_table));
+    offset = lx->header->moddir_off;
+    for(i = 0; i < lx->modules_directory_count; i++) {
+        lx->modules_directive_table[i].directive_number = read_word(offset);
+        offset = offset + 2;
+        lx->modules_directive_table[i].length = read_word(offset);
+        offset = offset + 2;
+        lx->modules_directive_table[i].offset = read_dword(offset);
+        offset = offset + 4;
+    }
+}
+
 byte is_lxorle(struct lx *lx) { // EXETYPE 0 = LE, 1 = LX
     if (lx->header->signature == 0x454C) return 0x00; // LE
     else if (lx->header->signature == 0x584C) return 0x01; // LX
@@ -353,6 +371,35 @@ static void get_lx_import_table(off_t offset_lx, struct lx *lx) {
     }
 }
 
+static void get_lx_import_procedure_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+    byte tmp;
+
+    i = 0;
+    offset = offset_lx + lx->header->impproc_off;
+    while (read_byte(offset) != '\0') {
+        tmp = read_byte(offset);
+        offset++;
+        offset = offset + tmp;
+        i++;
+    }
+    lx->import_procedure_name_count = i;
+    if (lx->import_procedure_name_count > 0) {
+        lx->import_procedure_name_table = malloc(i * sizeof(struct lx_import_procedure_name_table));
+        //printf("mmmmm 0x%08x 0x%08x\n", lx->header->impproc_off + offset_lx, offset_lx);
+
+        offset = offset_lx + lx->header->impproc_off;
+        for (i = 0; i < lx->import_procedure_name_count; i++) {
+            lx->import_procedure_name_table[i].length = read_byte(offset);
+            offset++;
+            lx->import_procedure_name_table[i].name = malloc(lx->import_procedure_name_table[i].length + 1);
+            memcpy(lx->import_procedure_name_table[i].name, read_data(offset), lx->import_procedure_name_table[i].length);
+            //printf("lifdsf 0x%02x %s\n", lx->import_procedure_name_table[i].length, lx->import_procedure_name_table[i].name);
+        }
+    }
+}
+
 static void print_lx_objects(off_t offset_lx, struct lx *lx) {
     off_t offset;
     int i, j;
@@ -376,7 +423,8 @@ static void print_lx_objects(off_t offset_lx, struct lx *lx) {
 
 static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
     off_t offset, offset2;
-    int i, j;
+    int i, j, k;
+    byte tmp[16];
 
     printf("Object pages:\n");
 
@@ -403,9 +451,42 @@ static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
             printf("Size: 0x%08x (%u)\n", lx->object_page_tables[i].data_size, lx->object_page_tables[i].data_size);
             print_lx_object_page_table_flags(lx->object_page_tables[i].flags);
             putchar('\n');
+            // print_lx_data
+            for (j = 0; j < lx->object_page_tables[i].data_size; j++) {
+                offset2 = offset + (j * 16);
+                for (k = 0; k < 16; k++) {
+                    tmp[k] = read_byte(offset2);
+                    printf("%02X ", tmp[k]);
+                    offset2++;
+                }
+                printf("    ");
+                for (k = 0; k < 16; k++) {
+                    printf("%c", isprint((char)(tmp[k] & 0xFF)) ? (char)(tmp[k] & 0xFF) : '.' );
+                }
+                putchar('\n');
+            }
+            putchar('\n');
         }
     }
-    putchar('\n');
+}
+
+static void print_lx_module_directive_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+
+    if(lx->modules_directory_count > 0) {
+        putchar('\n');
+        printf("Modules directory tables:\n");
+        for(i = 0; i < lx->modules_directory_count; i++) {
+            printf("Directive 0x%04x (%u)\n", lx->modules_directive_table[i].directive_number, lx->modules_directive_table[i].directive_number);
+            printf("Length: 0x%04x (%u)\n", lx->modules_directive_table[i].length, lx->modules_directive_table[i].length);
+            printf("Offset: 0x%08x (%u)\n", lx->modules_directive_table[i].offset, lx->modules_directive_table[i].offset);
+        }
+    }
+    else {
+        putchar('\n');
+        printf("No module directive tables.\n");
+    }
 }
 
 static void readlx(off_t offset_lx, struct lx *lx) {
@@ -430,11 +511,21 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     if (lx->imports_count > 0) {
         get_lx_import_table(offset_lx, lx);
     }
+
+    if (lx->header->impproc_off > 0) {
+        get_lx_import_procedure_table(offset_lx, lx);
+    }
     //printf("hest4\n");
     get_lx_export_tables(offset_lx, lx);
 
     //printf("hest5\n");
     get_lx_fixup_tables(offset_lx, lx);
+
+    printf("hhhhhh %u\n", lx->header->num_moddirs);
+    if (lx->header->num_moddirs >0 ) {
+        printf("MØFF\n");
+        get_lx_module_directory_tables(offset_lx, lx);
+    }
 
     
     if (lx->header->signature == 0x454C) {
@@ -504,6 +595,7 @@ void dumplx(off_t offset_lx) {
         putchar('\n');
         print_lx_objects(offset_lx, &lx);
         print_lx_objects_map(offset_lx, &lx);
+        print_lx_module_directive_table(offset_lx, &lx);
     }
 
     freelx(&lx);
