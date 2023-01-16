@@ -452,8 +452,9 @@ static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
             print_lx_object_page_table_flags(lx->object_page_tables[i].flags);
             putchar('\n');
             // print_lx_data
-            for (j = 0; j < lx->object_page_tables[i].data_size; j++) {
+            for (j = 0; j < lx->object_page_tables[i].data_size / 16; j++) {
                 offset2 = offset + (j * 16);
+                printf ("0x%08lx    ", offset2);
                 for (k = 0; k < 16; k++) {
                     tmp[k] = read_byte(offset2);
                     printf("%02X ", tmp[k]);
