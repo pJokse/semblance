@@ -16,6 +16,8 @@ typedef uint64_t qword;
 
 extern byte *map;
 
+extern long unsigned int exe_size;
+
 static inline const void *read_data(off_t offset)
 {
     return map + offset;

@@ -19,8 +19,8 @@ static void print_lx_flags(dword flags) {
     if (flags & 0x00000001UL) strcpy(buffer, "Single data");
     if (flags & 0x00000004UL) strcat(buffer, ", Per-process Initialization");
     else strcat(buffer, ", Global Initialization");
-    if (flags & 0x00000010UL) strcat(buffer, ", No internal fixup");
-    if (flags & 0x00000020UL) strcat(buffer, ", No external fixup");
+    if (flags & 0x00000010UL) strcat(buffer, ", No internal fixup"); // ???
+    if (flags & 0x00000020UL) strcat(buffer, ", No external fixup"); // ???
     if (flags & 0x00000100UL) strcat(buffer, ", Incompatible with PM windowing");
     if (flags & 0x00000200UL) strcat(buffer, ", Compatible with PM windowing");
     if (flags & 0x00000300UL) strcat(buffer, ", Uses PM windowing API");
@@ -29,14 +29,15 @@ static void print_lx_flags(dword flags) {
     if (flags & 0x00001000UL) strcat(buffer, ", Reserved");
     if (flags & 0x00002000UL) strcat(buffer, ", Module is not loadable");
     if (flags & 0x00004000UL) strcat(buffer, ", Reserved");
-    if ((flags & 0x00038000UL) == 0x00000000) strcat(buffer, ", Program module");
-    if ((flags & 0x00038000UL) == 0x00008000) strcat(buffer, ", Library module");
+    if ((flags & 0x00038000UL) == 0x00000000) strcat(buffer, ", Program module (EXE)");
+    if ((flags & 0x00038000UL) == 0x00008000) strcat(buffer, ", Library module (DLL)");
     if ((flags & 0x00038000UL) == 0x00018000) strcat(buffer, ", Protected Memory Library Module");
     if ((flags & 0x00038000UL) == 0x00020000) strcat(buffer, ", Physical Device Driver module");
     if ((flags & 0x00038000UL) == 0x00028000) strcat(buffer, ", Virtual Device Driver module");
     if (flags & 0x00040000UL) strcat(buffer, ", DLL");
     else strcat(buffer, ", Program file");
     if (flags & 0x00004000UL) strcat(buffer, ", Reserved");
+    if (flags & 0x00080000UL) strcat(buffer, ", MP Unsafe");
     if (flags & 0x00100000UL) strcat(buffer, ", Protected memory library module");
     if (flags & 0x00200000UL) strcat(buffer, ", Device driver");
     if (flags & 0x40000000UL) strcat(buffer, ", DLL Per-process termination");
@@ -127,13 +128,14 @@ static void print_lx_target_os(word os) {
     else if (os == 0x02) strcpy(buffer, "Windows");
     else if (os == 0x03) strcpy(buffer, "DOS 4.0 (European)");
     else if (os == 0x04) strcpy(buffer, "Windows 386");
+    else if (os == 0x05) strcpy(buffer, "IBM Microkernel Personality Neutral");
 
      printf("Target OS: %s\n", buffer);
 }
 
 static void print_lx_header(const struct header_lx *header) {
     putchar('\n');
-    //printf("Linker version: %d.%d\n", NULL);
+    printf("File size (bytes): 0x%08lx (%lu)\n", exe_size, exe_size);
     print_lx_text_order("Byte order: ", header->byte_order);
     print_lx_text_order("Word order: ", header->word_order);
     printf("EXE Format level: %d\n", header->level);
@@ -141,6 +143,7 @@ static void print_lx_header(const struct header_lx *header) {
     print_lx_target_os(header->os_type);
     printf("EXE version: 0x%04x\n", header->version);
     print_lx_flags(header->flags);
+    //printf("Linear executable starts at: 0x%04x (%u)");
     printf("Stack size: %d (0x%08x)\n", header->stacksize, header->stacksize);
     printf("Heap size: %d (0x%08x)\n", header->heapsize, header->heapsize);
     printf("Number of memory pages: %d\n", header->num_pages);
@@ -159,10 +162,6 @@ static void print_lx_header(const struct header_lx *header) {
         printf("Size of VxD resource table: 0x%08x (%u)\n", header->r.vxd.winreslen, header->r.vxd.winreslen);
         printf("VxD indentifier: 0x%04x (%u)\n", header->r.vxd.device_ID, header->r.vxd.device_ID);
         printf("VxD DDK version: 0x%04x (%u)\n", header->r.vxd.DDK_version, header->r.vxd.DDK_version);
-    }
-    if (header->flags & 0x000200000UL) { 
-        //printf("Windows VxD device ID: %u (0x%04x)\n");
-        //printf("Windows VxD DDK version: (0x%04x)\n");
     }
 }
 
@@ -436,6 +435,21 @@ static void print_lx_objects_map(off_t offset_lx, struct lx *lx) {
             printf("Size: 0x%08x (%u)\n", lx->object_page_tables[i].data_size, lx->object_page_tables[i].data_size);
             print_lx_object_page_table_flags(lx->object_page_tables[i].flags);
             putchar('\n');
+            for (j = 0; j < lx->object_page_tables[i].data_size / 16; j++) {
+                offset2 = offset + (j * 16);
+                printf ("0x%08lx    ", offset2);
+                for (k = 0; k < 16; k++) {
+                    tmp[k] = read_byte(offset2);
+                    printf("%02X ", tmp[k]);
+                    offset2++;
+                }
+                printf("    ");
+                for (k = 0; k < 16; k++) {
+                    printf("%c", isprint((char)(tmp[k] & 0xFF)) ? (char)(tmp[k] & 0xFF) : '.' );
+                }
+                putchar('\n');
+            }
+            putchar('\n');
         }
     }
     else if (is_lxorle(lx) == 1) { // LX
@@ -522,9 +536,9 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     //printf("hest5\n");
     get_lx_fixup_tables(offset_lx, lx);
 
-    printf("hhhhhh %u\n", lx->header->num_moddirs);
+    //printf("hhhhhh %u\n", lx->header->num_moddirs);
     if (lx->header->num_moddirs >0 ) {
-        printf("MØFF\n");
+        //printf("MØFF\n");
         get_lx_module_directory_tables(offset_lx, lx);
     }
 
@@ -570,14 +584,14 @@ void dumplx(off_t offset_lx) {
             putchar('\n');
             printf("Resident exports:\n");
             for (i = 0; i < lx.resident_exports_count; i++) {
-                printf("%s, %u\n", lx.resident_exports_table[i].name, lx.resident_exports_table->ordinal);
+                printf("Ordinal %u, %s\n", lx.resident_exports_table->ordinal, lx.resident_exports_table[i].name);
             }
         }
         if (lx.nonresident_exports_count > 0) {
             putchar('\n');
             printf("Non-resident exports:\n");
             for (i = 0; i < lx.nonresident_exports_count; i++) {
-                printf("%s, %u\n", lx.nonresident_exports_table[i].name, lx.nonresident_exports_table[i].ordinal);
+                printf("Ordinal %u, %s\n", lx.nonresident_exports_table[i].ordinal, lx.nonresident_exports_table[i].name);
             }
         }
     }
@@ -589,6 +603,13 @@ void dumplx(off_t offset_lx) {
             for(i = 0; i < lx.imports_count; i++) {
                 printf("%s\n",lx.imports_table[i].name);
             }
+        }
+        if (lx.import_procedure_name_count > 0) {
+            printf("\nImported procedures names:\n");
+            for (i = 0; i < lx.import_procedure_name_count; i++) {
+                printf("%s\n", lx.import_procedure_name_table[i].name);
+            }
+
         }
     }
 

@@ -32,6 +32,7 @@
 #include "semblance.h"
 
 byte *map;
+long unsigned int exe_size;
 
 word mode;
 word opts;
@@ -62,6 +63,7 @@ static void dump_file(char *file){
         return;
     }
 
+    exe_size = st.st_size;
     magic = read_word(0);
 
     printf("File: %s\n", file);
