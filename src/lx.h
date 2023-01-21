@@ -133,9 +133,16 @@ struct lx_fixups_page_table {
 };
 
 struct lx_fixups_record_table {
-    byte source;
+    byte type;
     byte flags;
     word source_offset;
+    word object;
+    dword target_offset;
+    word module_ordinal;
+    word import_ordinal;
+    dword name_offset;
+    dword additive;
+    word *source_list;
 };
 
 struct lx_modules_directory_table {
@@ -174,9 +181,10 @@ struct lx {
     struct lx_object_page_table *object_page_tables;
     unsigned int objects_page_count;
 
-    struct lx_fixups *fixups;
-    dword fixups_offset_end;
-    unsigned int fixups_count;
+    char *fixup_map;
+
+    struct lx_fixups_record_table ***fixups;
+    unsigned int *fixups_count;
 
     struct lx_modules_directory_table *modules_directive_table;
     unsigned int modules_directory_count;
