@@ -296,7 +296,7 @@ static void get_lx_export_tables(off_t offset_lx, struct lx *lx) {
             count++;
         }
         lx->nonresident_exports_count = count;
-        lx->nonresident_exports_table = malloc(lx->resident_exports_count * sizeof(struct lx_exports));
+        lx->nonresident_exports_table = malloc(lx->nonresident_exports_count * sizeof(struct lx_exports));
 
         offset = lx->header->nonres_off;
         memset(buffer, 0, 512);
@@ -311,7 +311,7 @@ static void get_lx_export_tables(off_t offset_lx, struct lx *lx) {
             ordinal = read_word(offset);
             offset = offset + 2;
             lx->nonresident_exports_table[i].name = strdup(buffer);
-            printf("offsgasfd %s\n", lx->nonresident_exports_table[i].name);
+            printf("offsgasfd %s %p\n", lx->nonresident_exports_table[i].name, lx->nonresident_exports_table[i].name);
             lx->nonresident_exports_table[i].ordinal = ordinal;
             memset(buffer, 0, 512);
         }
@@ -733,7 +733,7 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     get_lx_export_tables(offset_lx, lx);
 
     //printf("hest5\n");
-    get_lx_fixup_tables(offset_lx, lx);
+    //get_lx_fixup_tables(offset_lx, lx);
 
     //printf("hhhhhh %u\n", lx->header->num_moddirs);
     if (lx->header->num_moddirs >0 ) {
@@ -790,7 +790,7 @@ void dumplx(off_t offset_lx) {
             putchar('\n');
             printf("Non-resident exports:\n");
             for (i = 0; i < lx.nonresident_exports_count; i++) {
-                printf("Ordinal %u, %s\n", lx.nonresident_exports_table[i].ordinal, lx.nonresident_exports_table[i].name);
+                printf("Ordinal %u, %s, %p\n", lx.nonresident_exports_table[i].ordinal, lx.nonresident_exports_table[i].name, lx.nonresident_exports_table[i].name);
             }
         }
     }
