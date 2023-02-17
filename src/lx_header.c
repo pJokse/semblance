@@ -465,6 +465,7 @@ static void get_lx_fixup_tables(off_t offset_lx, struct lx *lx) {
     }
     for (i = 0; i < lx->object_tables_count; i++) {
         printf("Object 0x%04x (%u)\n", i, i);
+        printf("fixup count 0x%x\n", lx->fixups_count[i]);
         for (j = 0; j < lx->fixups_count[i]; j++) {
             char buf1[256];
             char buf2[1024];
@@ -598,9 +599,31 @@ static void get_lx_import_procedure_table(off_t offset_lx, struct lx *lx) {
     }
 }
 
-static void print_lx_objects(off_t offset_lx, struct lx *lx) {
-    off_t offset;
+static void print_hex_dump(off_t offset, word datasize) {
     int i, j;
+    off_t offset2;
+    byte tmp[16];
+
+    for (i = 0; i < datasize / 16; i++) {
+        offset2 = offset + (i * 16);
+        printf ("0x%08lx    ", offset2);
+        for (j = 0; j < 16; j++) {
+            tmp[j] = read_byte(offset2);
+            printf("%02X ", tmp[j]);
+            offset2++;
+        }
+        printf("    ");
+        for (j = 0; j < 16; j++) {
+            printf("%c", isprint((char)(tmp[j] & 0xFF)) ? (char)(tmp[j] & 0xFF) : '.' );
+        }
+                        putchar('\n');
+    }
+}
+
+static void print_lx_objects(off_t offset_lx, struct lx *lx) {
+    off_t offset, offset2;
+    int i, j, k, l;
+    byte tmp[16];
 
     printf("Objects:\n");
     for(i = 0; i < lx->object_tables_count; i++) {
@@ -611,10 +634,75 @@ static void print_lx_objects(off_t offset_lx, struct lx *lx) {
         printf("Page table count: 0x%04x (%u)\n", lx->object_tables[i].page_map_entries, lx->object_tables[i].page_map_entries);
         print_lx_object_flags(lx->object_tables[i].flags, is_lxorle(lx));
         if (lx->object_tables[i].page_map_entries > 0) {
-            for (j = 0; j < lx->object_tables[i].page_map_entries; j++) {
-                printf("- Object page 0x%04x (%u)\n", lx->object_tables[i].page_map_index + j, lx->object_tables[i].page_map_index + j);
+            if (is_lxorle(lx) == 0) { // LE
+                for(j = 0; j < lx->objects_page_count; j++) {
+                    offset = lx->object_page_tables[j].page_data_offset + (j * lx->header->page_size) + lx->header->page_off;
+                    printf("Page 0x%08x (%u) Index: 0x%08x (%u)\n", j, j, lx->object_page_tables[j].page_data_offset, lx->object_page_tables[j].page_data_offset);
+                    printf("Offset: 0x%08lx (%lu)\n", offset, offset);
+                    printf("Size: 0x%08x (%u)\n", lx->object_page_tables[j].data_size, lx->object_page_tables[j].data_size);
+                    printf("- ");
+                    print_lx_object_page_table_flags(lx->object_page_tables[j].flags);
+                    putchar('\n');
+                    /*for (k = 0; k < lx->object_page_tables[j].data_size / 16; k++) {
+                        offset2 = offset + (k * 16);
+                        printf ("0x%08lx    ", offset2);
+                        for (l = 0; l < 16; l++) {
+                            tmp[l] = read_byte(offset2);
+                            printf("%02X ", tmp[l]);
+                            offset2++;
+                        }
+                        printf("    ");
+                        for (k = 0; k < 16; k++) {
+                            printf("%c", isprint((char)(tmp[l] & 0xFF)) ? (char)(tmp[l] & 0xFF) : '.' );
+                        }
+                        putchar('\n');
+                    }*/
+                    if (lx->object_tables[i].flags & 0x0004) {
+                    }
+                    else {
+                        print_hex_dump(offset, lx->object_page_tables[j].data_size);
+                    }
+                    putchar('\n');
+                }
             }
+            else if (is_lxorle(lx) == 1) { // LX
+                for(j = 0; j < lx->objects_page_count; j++) {
+                    if (lx->object_page_tables[j].flags & 0x0001) {
+                        offset = lx->header->idmap_off + (lx->object_page_tables[j].page_data_offset << lx->header->l.page_shift);
+                    }
+                    else {
+                        offset = lx->header->page_off + (lx->object_page_tables[j].page_data_offset << lx->header->l.page_shift);
+                    }
+                    printf("Page 0x%04x (%u) Index: 0x%08x (%u)\n", j, j, lx->object_page_tables[j].page_data_offset, lx->object_page_tables[j].page_data_offset);
+                    printf("Offset: 0x%08lx (%lu)\n", offset, offset);
+                    printf("Size: 0x%08x (%u)\n", lx->object_page_tables[j].data_size, lx->object_page_tables[j].data_size);
+                    printf("- ");
+                    print_lx_object_page_table_flags(lx->object_page_tables[j].flags);
+                    putchar('\n');
+                    // print_lx_data
+                    /*for (k = 0; k < lx->object_page_tables[j].data_size / 16; k++) {
+                        offset2 = offset + (k * 16);
+                        printf ("0x%08lx    ", offset2);
+                        for (l = 0; l < 16; l++) {
+                            tmp[l] = read_byte(offset2);
+                            printf("%02X ", tmp[l]);
+                            offset2++;
+                        }
+                        printf("    ");
+                        for (l = 0; l < 16; l++) {
+                            printf("%c", isprint((char)(tmp[l] & 0xFF)) ? (char)(tmp[l] & 0xFF) : '.' );
+                        }
+                        putchar('\n');
+                    }*/
+                    if (lx->object_tables[i].flags & 0x0004) {
+                    }
+                    else {
+                        print_hex_dump(offset, lx->object_page_tables[j].data_size);
+                    }
+                    putchar('\n');
         }
+    }
+           }
         putchar('\n');
     }
 }
@@ -708,6 +796,16 @@ static void readlx(off_t offset_lx, struct lx *lx) {
 
     lx->header = read_data(offset_lx);
 
+    if (lx->header->signature == 0x454C) {
+        // LE
+        lx->type = "LE";
+    }
+    else if (lx->header->signature == 0x584C) {
+        // LX
+        lx->type = "LX";
+    }
+
+
     //printf("VXD DDK %04x\n", lx->header->r.vxd.DDK_version);
     //printf("hest1\n");
     lx->object_tables_count = lx->header->num_objects;
@@ -732,6 +830,7 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     //printf("hest4\n");
     get_lx_export_tables(offset_lx, lx);
 
+    get_lx_fixup_tables(offset_lx, lx);
     //printf("hest5\n");
     //get_lx_fixup_tables(offset_lx, lx);
 
@@ -740,16 +839,7 @@ static void readlx(off_t offset_lx, struct lx *lx) {
         //printf("MØFF\n");
         get_lx_module_directory_tables(offset_lx, lx);
     }
-
     
-    if (lx->header->signature == 0x454C) {
-        // LE
-        lx->type = "LE";
-    }
-    else if (lx->header->signature == 0x584C) {
-        // LX
-        lx->type = "LX";
-    }
     //printf("Magical girl %#04X\n", lx->header->signature);
     //printf("Byte order: %#2X\n", lx->header->byte_order);
     //printf("Object count %d\n", lx->object_tables_count);
@@ -815,7 +905,7 @@ void dumplx(off_t offset_lx) {
     if (mode & DISASSEMBLE) {
         putchar('\n');
         print_lx_objects(offset_lx, &lx);
-        print_lx_objects_map(offset_lx, &lx);
+        //print_lx_objects_map(offset_lx, &lx);
         print_lx_module_directive_table(offset_lx, &lx);
     }
 
