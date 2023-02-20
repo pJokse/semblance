@@ -318,211 +318,51 @@ static void get_lx_export_tables(off_t offset_lx, struct lx *lx) {
     }
 }
 
-unsigned int lx_fixup_parse(char *begin, struct lx_fixups_record_table *fix) {
-    struct lx_fixups_record_table tmp;
-    char *start = begin;
 
-    if (fix == NULL) {
-        fix = &tmp;
-    }
-    fix->type = *begin++;
-    fix->flags = *begin++;
-    if (fix->type & 0x20) {
-        fix->source_offset = *begin++;
-    }
-    else {
-        fix->source_offset = *begin;
-        begin = begin + 2;
-    }
-    if (fix->flags & 0x40) {
-        fix->object = *begin;
-        begin = begin + 2;
-    }
-    else {
-        fix->object = *begin++;
+
+static void get_lx_fixup_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+
+    lx->fixup_page_table = malloc(sizeof(struct lx_fixup_page_table) * lx->header->num_objects + 1);
+ 
+    offset = offset_lx + lx->header->fixpage_off;
+    for (i = 0; i <= lx->header->num_pages; i++) {
+        lx->fixup_page_table[i].offset = read_dword(offset);
+        offset = offset + 4;
+        //printf("moffset %u 0x%04x 0x%04x\n", i, lx->fixup_page_table[i].offset, lx->fixup_page_table[i].offset + offset_lx + lx->header->fixrec_off);
     }
     
-    if ((fix->flags & 0x03) == 0x00) {
-        if ((fix->type & 0x0F) == 0x02) {
-
-        }
-        else if (fix->flags & 0x10) {
-            fix->target_offset = *begin;
-            begin = begin + 4;
-        }
-        else {
-            fix->target_offset = *begin;
-            begin = begin + 2;
-        }
-    }
-    else if ((fix->flags & 0x03) == 0x01) {
-        if ((fix->flags & 0x40)) {
-            fix->module_ordinal = *begin;
-            begin = begin + 2;
-        }
-        else {
-            fix->module_ordinal = *begin++;
-        }
-        if (fix->flags & 0x80) {
-            fix->import_ordinal = *begin++;
-        }
-        else if (fix->flags & 0x10) {
-            fix->import_ordinal = *begin;
-            begin = begin + 4;
-        }
-        else {
-            fix->import_ordinal = *begin;
-            begin = begin + 2;
-        }
-        if (fix->flags & 0x04) {
-            fix->additive = *begin;
-            begin = begin + 4;
-        }
-    }
-    else if ((fix->flags & 0x03) == 0x02) {
-        if (fix->flags & 0x40) {
-            fix->module_ordinal = *begin;
-            begin = begin + 2;
-        }
-        else {
-            fix->module_ordinal = *begin++;
-        }
-        if (fix->flags & 0x10) {
-            fix->name_offset = *begin;
-            begin = begin + 4;
-        }
-        else {
-            fix->name_offset = *begin;
-            begin = begin + 2;
-        }
-        if (fix->flags & 0x04) {
-            fix->additive = *begin;
-            begin = begin + 4;
-        }
-    }
-    else {
-        if (fix->flags & 0x40) {
-            fix->module_ordinal = *begin;
-            begin = begin + 2;
-        }
-        else {
-            fix->module_ordinal = *begin++;
-        }
-        if (fix->flags & 0x04) {
-            fix->additive = *begin;
-            begin = begin + 4;
-        }
-    }
-    if (fix->type & 0x20) {
-        begin = begin + 2 * fix->source_offset;
-    }
-
-    return begin - start;
 }
 
-unsigned int lx_fixup_length(char *begin) {
-    return lx_fixup_parse(begin, NULL);
-}
-
-static void get_lx_fixup_tables(off_t offset_lx, struct lx *lx) {
+static void get_lx_fixup_records_table(off_t offset_lx, struct lx *lx) {
     off_t offset;
     int i, j, k;
-    struct lx_fixups_record_table fix;
-    char *fixup_map;
- 
-    
-    offset = offset_lx + lx->header->fixpage_off;
-    lx->fixup_map = malloc(sizeof(uint32_t) * lx->header->num_pages + 1);
-    memcpy(lx->fixup_map, read_data(offset), sizeof(uint32_t) * lx->header->num_pages + 1);
+    byte tmp1, tmp2;
 
-    printf("fixup offset: 0x%08lx (%lu)\n", offset, offset);
-    printf("fixup from header offset: 0x%08lx (%lu)\n", offset - offset_lx, offset - offset_lx);
-    offset = offset_lx + lx->header->fixrec_off;
-    printf("fixup rec offset: 0x%08lx (%lu)\n", offset, offset);
-    printf("fixup rec from header offset: 0x%08lx (%lu)\n", offset - offset_lx, offset - offset_lx);
-
-    lx->fixups_count = (unsigned int *)malloc(sizeof(int) * lx->header->num_pages);
-    lx->fixups = (struct lx_fixups_record_table ***)malloc(sizeof(void *) * lx->header->num_pages);
-    fixup_map = (char *)malloc(lx->header->fixup_size);
-    memcpy(fixup_map, read_data(offset_lx + lx->header->fixrec_off), lx->header->fixup_size);
-    for (i = 0; i < lx->header->num_pages; i++) {
-        char *begin = fixup_map + lx->fixup_map[i];
-        char *end = fixup_map + lx->fixup_map[i + 1];
-        lx->fixups_count[i] = 0;
-        while (begin < end) {
-            begin = begin + lx_fixup_length(begin);
-            lx->fixups_count[i]++;
-        }
-        lx->fixups[i] = (struct lx_fixups_record_table **)malloc(lx->fixups_count[i] * sizeof(struct lx_fixups_record_table *));
-        begin = fixup_map + lx->fixup_map[i];
-        j = 0;
-        while (begin < end) {
-            struct lx_fixups_record_table *f = (struct lx_fixups_record_table *)malloc(sizeof(struct lx_fixups_record_table));
-            memset(f, 0, sizeof(struct lx_fixups_record_table));
-            begin = begin + lx_fixup_parse(begin, f);
-            lx->fixups[i][j++] = f;
+    j = 0;
+    for (i = 0; i <= lx->header->num_pages; i++) {
+        offset = lx->fixup_page_table[i].offset + offset_lx + lx->header->fixrec_off;
+        tmp1 = read_byte(offset);
+        tmp2 = read_byte(offset + 1);
+        j = j + 2;
+        switch (tmp1) {
+            case 0x00: // Byte fixup (8 bit)
+                
+            case 0x01: // Undefined
+            case 0x02: // 16 bit selector fixup (16 bit)
+            case 0x03: // 16:16 bit selector fixup (32 bit)
+            case 0x04: // Undefined
+            case 0x05: // 16 bit offset fixup (16 bit)
+            case 0x06: // 16:32 pointer offset fixup (48 bit)
+            case 0x07: // 32 bit offset fixup (32 bit)
+            case 0x08: // 32 bit self-relative offset fixup (32 bit)
+            case 0x10: // Fix to alias flag
+            case 0x20: // Source list flag
+            case 0x0f: // Source mask
+            default:
         }
     }
-    for (i = 0; i < lx->object_tables_count; i++) {
-        printf("Object 0x%04x (%u)\n", i, i);
-        printf("fixup count 0x%x\n", lx->fixups_count[i]);
-        for (j = 0; j < lx->fixups_count[i]; j++) {
-            char buf1[256];
-            char buf2[1024];
-            struct lx_fixups_record_table *f = lx->fixups[i][j];
-            printf("Object page 0x%04x (%u)\n", j, j);
-            switch(f->type & 0x0F) {
-                case 0:
-                    strcpy(buf1, "byte");
-                    break;
-                case 1:
-                    strcpy(buf1, "u1");
-                    break;
-                case 2:
-                    strcpy(buf1, "seg");
-                    break;
-                case 3:
-                    strcpy(buf1, "32bit ptr");
-                    break;
-                case 4:
-                    strcpy(buf1, "u4");
-                    break;
-                case 5:
-                    strcpy(buf1, "16bit offset");
-                    break;
-                case 6:
-                    strcpy(buf1, "16:32bit offset");
-                    break;
-                case 7:
-                    strcpy(buf1, "32bit offset");
-                    break;
-                case 8:
-                    strcpy(buf1, "32bit relative");
-                    break;
-            }
-            switch (f->flags & 0x03) {
-                case 0x00:
-                    sprintf(buf2,"-> 0x%08x (%x:%06x)", lx->object_tables[f->object - 1].relocation_base_address, f->object, f->target_offset);
-                    unsigned char buf3[6] = "\0\0\0\0\0\0";
-                    memcpy(buf3, read_data(f->target_offset + offset_lx), sizeof(buf3) - 1);
-                    char buf4[256];
-                    sprintf(buf4, "%02x %02x %02x %02x %02x %02x %c%c%c%c%c%c\n", buf3[0], buf3[1], buf3[2], buf3[3], buf3[4], buf3[5], isprint(buf3[0] ? buf3[0] : '.' ), isprint(buf3[1] ? buf3[1] : '.' ), isprint(buf3[2] ? buf3[2] : '.' ), isprint(buf3[3] ? buf3[3] : '.' ), isprint(buf3[4] ? buf3[4] : '.' ), isprint(buf3[5] ? buf3[5] : '.' ));
-                    break;
-                case 0x01:
-                    sprintf(buf2,"import by ordinal");
-                    break;
-                case 0x02:
-                    sprintf(buf2,"import by name");
-                    break;
-                case 0x03:
-                    sprintf(buf2,"reference via entry");
-                    break;
-            }
-            printf("%s\n", buf1);
-            printf("%s\n", buf2);
-        }
-    }
-
 }
 
 static void get_lx_module_directory_tables(off_t offset_lx, struct lx *lx) {
@@ -577,23 +417,33 @@ static void get_lx_import_procedure_table(off_t offset_lx, struct lx *lx) {
 
     i = 0;
     offset = offset_lx + lx->header->impproc_off;
+    if (read_byte(offset) == '\0') {
+        offset++;
+    }
+    printf("hest offset 0x%08x 0x%02x\n", lx->header->impproc_off, read_byte(offset));
     while (read_byte(offset) != '\0') {
         tmp = read_byte(offset);
         offset++;
         offset = offset + tmp;
         i++;
+        //printf("heft\n");
     }
     lx->import_procedure_name_count = i;
+
     if (lx->import_procedure_name_count > 0) {
         lx->import_procedure_name_table = malloc(i * sizeof(struct lx_import_procedure_name_table));
         //printf("mmmmm 0x%08x 0x%08x\n", lx->header->impproc_off + offset_lx, offset_lx);
-
         offset = offset_lx + lx->header->impproc_off;
+        if (read_byte(offset) == '\0') {
+            offset++;
+        }
+
         for (i = 0; i < lx->import_procedure_name_count; i++) {
             lx->import_procedure_name_table[i].length = read_byte(offset);
             offset++;
             lx->import_procedure_name_table[i].name = malloc(lx->import_procedure_name_table[i].length + 1);
             memcpy(lx->import_procedure_name_table[i].name, read_data(offset), lx->import_procedure_name_table[i].length);
+            offset = offset + lx->import_procedure_name_table[i].length;
             //printf("lifdsf 0x%02x %s\n", lx->import_procedure_name_table[i].length, lx->import_procedure_name_table[i].name);
         }
     }
@@ -791,6 +641,26 @@ static void print_lx_module_directive_table(off_t offset_lx, struct lx *lx) {
     }
 }
 
+static void print_lx_fixup_page_table(off_t offset_lx, struct lx *lx) {
+    off_t offset;
+    int i;
+
+    putchar('\n');
+    printf("Fixup Page Table:\n");
+    printf("Page\tRecord Offset\tFile offset\n");
+    offset = offset_lx + lx->header->fixpage_off;
+    for (i = 0; i < lx->header->num_pages; i++) {
+        lx->fixup_page_table[i].offset = read_dword(offset);
+        offset = offset + 4;
+        printf("0x%04x\t0x%08x\t0x%08lx\n", i + 1, lx->fixup_page_table[i].offset, lx->fixup_page_table[i].offset + offset_lx + lx->header->fixrec_off);
+    }
+    putchar('\n');
+}
+
+static void print_lx_fixup_record_table(off_t offset_lx, struct lx *lx) {
+
+}
+
 static void readlx(off_t offset_lx, struct lx *lx) {
     off_t offset;
 
@@ -830,10 +700,12 @@ static void readlx(off_t offset_lx, struct lx *lx) {
     //printf("hest4\n");
     get_lx_export_tables(offset_lx, lx);
 
-    get_lx_fixup_tables(offset_lx, lx);
+    if (lx->header->fixpage_off > 0) {
+        get_lx_fixup_table(offset_lx, lx);
+        get_lx_fixup_records_table(offset_lx, lx);
+    }
     //printf("hest5\n");
-    //get_lx_fixup_tables(offset_lx, lx);
-
+ 
     //printf("hhhhhh %u\n", lx->header->num_moddirs);
     if (lx->header->num_moddirs >0 ) {
         //printf("MØFF\n");
@@ -893,6 +765,7 @@ void dumplx(off_t offset_lx) {
                 printf("%s\n",lx.imports_table[i].name);
             }
         }
+
         if (lx.import_procedure_name_count > 0) {
             printf("\nImported procedures names:\n");
             for (i = 0; i < lx.import_procedure_name_count; i++) {
@@ -907,6 +780,8 @@ void dumplx(off_t offset_lx) {
         print_lx_objects(offset_lx, &lx);
         //print_lx_objects_map(offset_lx, &lx);
         print_lx_module_directive_table(offset_lx, &lx);
+        print_lx_fixup_page_table(offset_lx, &lx);
+        print_lx_fixup_record_table(offset_lx, &lx);
     }
 
     freelx(&lx);

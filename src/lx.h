@@ -128,21 +128,37 @@ struct lx_import_procedure_name_table {
     char *name;
 };
 
-struct lx_fixups_page_table {
+struct lx_fixup_page_table {
     dword offset;
 };
 
 struct lx_fixups_record_table {
     byte type;
     byte flags;
-    word source_offset;
+    word source_offset_count;
     word object;
-    dword target_offset;
-    word module_ordinal;
-    word import_ordinal;
-    dword name_offset;
-    dword additive;
-    word *source_list;
+    union target_type {
+        dword target_offset;
+        word module_ordinal;
+        word import_ordinal;
+    } fixup_target_type;
+    union target_fixup {
+        struct internal_fixup {
+            dword target_offset;
+        } int_fixup;
+        struct import_by_ordinal {
+            dword ordinal;
+            dword additive;
+        } imp_by_ord;
+        struct import_by_name {
+            dword proc_name;
+            dword additive;
+        } imp_by_name;
+        struct internal_entry_record {
+            dword additve;
+        } int_entry_rcd;
+    } fixup_target_fixup;
+    word source_offset[1];
 };
 
 struct lx_modules_directory_table {
@@ -181,10 +197,9 @@ struct lx {
     struct lx_object_page_table *object_page_tables;
     unsigned int objects_page_count;
 
-    char *fixup_map;
+    struct lx_fixup_page_table *fixup_page_table;
 
-    struct lx_fixups_record_table ***fixups;
-    unsigned int *fixups_count;
+    struct lx_fixup_records_table *fixup_records_table;
 
     struct lx_modules_directory_table *modules_directive_table;
     unsigned int modules_directory_count;
