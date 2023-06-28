@@ -1,5 +1,5 @@
 Semblance version 0.2
-===================== 
+=====================
 
 Semblance is eventually meant as a set of tools to manipulate assembly code.
 Currently it only contains a single program:
